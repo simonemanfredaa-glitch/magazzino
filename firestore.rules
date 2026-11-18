@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signed() { return request.auth != null; }
+    function email() { return signed() && request.auth.token.email != null ? request.auth.token.email.lower() : ''; }
+    function admin() {
+      return signed() && (email() == 'simonemanfredaa@gmail.com' ||
+        (exists(/databases/$(database)/documents/config/admin) &&
+         email() in get(/databases/$(database)/documents/config/admin).data.emails));
+    }
+    function only(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+
+    // inventario: tutti leggono; chiunque può segnare "da ricomprare"; il resto solo admin
+    match /articoli/{id} {
+      allow read: if true;
+      allow update: if admin() || (only(['finendo']) && request.resource.data.finendo is bool);
+      allow create, delete: if admin();
+    }
+    // liste: tutti leggono (serve per la disponibilità); il PA con il link può segnare preso/rientro/note
+    match /liste/{id} {
+      allow read: if true;
+      allow create: if signed() && request.resource.data.owner == request.auth.uid;
+      allow update: if admin() || (signed() && resource.data.owner == request.auth.uid && request.resource.data.owner == request.auth.uid) || only(['stato']);
+      allow delete: if admin() || (signed() && resource.data.owner == request.auth.uid);
+    }
+    // note dal QR: chiunque le scrive, solo admin le chiude
+    match /note/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.fatto == false && request.resource.data.testo is string && request.resource.data.testo.size() <= 500;
+      allow update, delete: if admin();
+    }
+    match /storico/{id} {
+      allow read: if true;
+      allow create: if signed();
+      allow update, delete: if admin();
+    }
+    match /config/{id} {
+      allow read: if true;
+      allow write: if admin();
+    }
+  }
+}
