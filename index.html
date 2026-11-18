@@ -234,11 +234,14 @@ h2{margin:16px 0 8px;font-size:11.5px}
 .arow{padding:9px 12px}.arow b{font-size:15px}
 .wide{height:48px;font-size:15px}
 .xed{border:0;background:none;padding:0;margin:0;font:inherit;font-weight:700;color:#1565C0;text-decoration:underline;cursor:pointer}.xdel{width:100%;margin-top:10px;height:48px;border:0;border-radius:14px;font-weight:800;font-size:15px;font-family:inherit}
-.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 16px;font-weight:700;width:100%}
+.gbtn{color:var(--ink)!important;display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 16px;font-weight:700;width:100%}
 .acct{margin:22px 0 0;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:13px;color:var(--mut)}
 .acct span{display:block;text-align:center}.acct b{color:var(--ink)}
 .acct>button:not(.gbtn){border:0;background:transparent;color:var(--mut);font-weight:700;text-decoration:underline;padding:4px}
 .acct .gbtn{max-width:320px}
+.oppure{display:flex;align-items:center;gap:10px;margin:12px 0;color:var(--mut);font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase}.oppure:before,.oppure:after{content:"";flex:1;height:1px;background:var(--line)}
+.gate{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;margin:22px 0 4px;display:flex;flex-direction:column;gap:6px}.gate b{font-size:17px}.gate span{color:var(--mut);font-size:14px;line-height:1.45}.gate span b{font-size:inherit;color:var(--ink)}.gate .gbtn{margin-top:8px}
+.collab{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin:0 0 10px}.collab span{flex:1;min-width:0}.collab b{display:block;font-size:14px}.collab small{display:block;color:var(--mut);font-size:12px;margin-top:2px;overflow-wrap:anywhere}.collab i{font-style:normal;font-weight:800;font-size:20px}
 </style>
 
 <style>
@@ -542,14 +545,25 @@ function liveUpdate() {
 window.onDataChange = liveUpdate;
 window.onDataError = function (e) { if (/permission|insufficient/i.test(String(e && (e.code || e.message)))) toast('Permesso negato: accedi con Google', true); };
 setInterval(function () { if (later && canRender()) liveUpdate(); }, 1500);
+function chiediEmail() {
+  return new Promise(function (res) {
+    var m = modal('<h3>Conferma la tua email</h3><p>Scrivi l\'indirizzo a cui è arrivato il link di accesso.</p><input id="cfe" type="email" inputmode="email" autocomplete="email"><div class="row2"><button class="btn-g" id="cfc">Annulla</button><button class="btn-k" id="cfk">Entra</button></div>');
+    m.querySelector('#cfc').onclick = function () { closeModal(); res(''); };
+    m.querySelector('#cfk').onclick = function () { var v = m.querySelector('#cfe').value.trim(); closeModal(); res(v); };
+  });
+}
+var linkDone = FBX.linkIn(chiediEmail).then(function (ok) { if (ok) toast('Accesso fatto'); }).catch(function (e) {
+  var c = String(e && (e.code || e.message)); toast(/invalid-action-code|expired/.test(c) ? 'Link scaduto o già usato: chiedine uno nuovo' : /invalid-email/.test(c) ? 'L\'email non corrisponde a quella del link' : 'Accesso non riuscito', true);
+});
 function load() {
-  return call('getData').then(function (d) {
+  return linkDone.then(function () { return call('getData'); }).then(function (d) {
     S.data = d; document.getElementById('loader').style.display = 'none';
     if (S.shared === null) {
       readParams(function (prm) {
         var p = prm.lista;
-        S.shared = p && d.producers.indexOf(p) >= 0 ? p : '';
-        if (S.shared) { S.view = 'list'; S.producer = S.shared; }
+        var ok = p && d.producers.indexOf(p) >= 0;
+        S.shared = ok && !FBX.canSee(p) ? p : '';
+        if (ok) { S.view = 'list'; S.producer = p; }
         else if (prm.vista === 'inventario') { S.sharedInv = true; S.view = 'mag'; }
         render();
       });
@@ -659,11 +673,37 @@ function isAdmin() { return FBX.isAdmin(); }
 function adminPin() { return isAdmin() ? 'admin' : ''; }
 function pinOf(p) { return (isAdmin() || (p && FBX.owns(p))) ? 'ok' : ''; }
 function setPin() {}
-function canOpen(p) { return !!pinOf(p) || S.shared === p; }
+function canOpen(p) { return FBX.canSee(p) || S.shared === p; }
 function ownerOf(p) { var o = (S.data.owners || {})[p]; return o ? (o.name || o.email) : ''; }
-function signIn() {
-  return FBX.login().then(function () { return call('getData'); }).then(function (d) { S.data = d; render(); return true; })
-    .catch(function (e) { if (!/cancel|closed-by-user/.test(String(e && e.code))) toast(msg(e), true); return false; });
+function signIn(title, sub) {
+  return new Promise(function (res) {
+    var m = modal('<h3>' + esc(title || 'Accedi') + '</h3><p>' + esc(sub || 'Entra con Google oppure con la tua email: ti arriva un link, niente password.') + '</p>' +
+      '<button class="wide gbtn" id="gk">' + GICON + ' Accedi con Google</button>' +
+      '<div class="oppure"><span>oppure</span></div>' +
+      '<input id="lem" type="email" inputmode="email" autocomplete="email" placeholder="nome@esempio.com">' +
+      '<button class="wide" id="lk" style="margin-top:8px">Mandami il link di accesso</button>' +
+      '<button class="link" id="pc" style="margin-top:2px">Annulla</button>');
+    m.querySelector('#pc').onclick = function () { closeModal(); res(false); };
+    m.querySelector('#gk').onclick = function () {
+      closeModal();
+      FBX.login().then(function () { return call('getData'); }).then(function (d) { S.data = d; render(); res(true); })
+        .catch(function (e) { if (!/cancel|closed-by-user/.test(String(e && e.code))) toast(msg(e), true); res(false); });
+    };
+    var send = function () {
+      var em = m.querySelector('#lem').value.trim(), b = m.querySelector('#lk');
+      b.disabled = true; b.textContent = 'Invio…';
+      FBX.sendLink(em).then(function () {
+        var bx = m.querySelector('.modal');
+        bx.innerHTML = '<h3>Controlla la posta</h3><p>Ho mandato un link di accesso a <b>' + esc(em.toLowerCase()) + '</b>. Aprilo da questo telefono (guarda anche nello spam).</p><button class="wide" id="okk">Ok</button>';
+        bx.querySelector('#okk').onclick = function () { closeModal(); res(false); };
+      }).catch(function (e) {
+        b.disabled = false; b.textContent = 'Mandami il link di accesso';
+        var c = String(e && (e.code || e.message)); toast(/quota|too-many/.test(c) ? 'Troppi link oggi: riprova domani o entra con Google' : msg(e), true);
+      });
+    };
+    m.querySelector('#lk').onclick = send;
+    m.querySelector('#lem').onkeydown = function (e) { if (e.key === 'Enter') send(); };
+  });
 }
 /* ---------- modali ---------- */
 function modal(html) {
@@ -680,15 +720,14 @@ function closeModal() { var m = document.getElementById('mbg'); if (m) m.remove(
 function askPin(p) {
   return new Promise(function (res) {
     if (pinOf(p)) return res('ok');
-    var u = FBX.user();
-    if (u) {
-      toast(p ? 'Questa lista è di ' + (ownerOf(p) || 'un altro producer') + ': solo chi l\'ha creata può modificarla' : 'Il tuo account non è admin', true);
+    if (FBX.user()) {
+      toast(p ? (FBX.canSee(p) ? 'Questa lista è di ' + (ownerOf(p) || 'un altro producer') + ': puoi solo vederla' : 'Non hai accesso a questa lista') : 'Il tuo account non è admin', true);
       return res(null);
     }
-    var m = modal('<h3>' + (p ? esc(p) : 'Accesso producer') + '</h3><p>' + (p ? 'Accedi con il tuo account Google: puoi modificare solo le liste che hai creato tu.' : 'Accedi con l\'account Google admin.') + '</p>' +
-      '<button class="wide gbtn" id="gk">' + GICON + ' Accedi con Google</button><button class="link" id="pc" style="margin-top:4px">Annulla</button>');
-    m.querySelector('#gk').onclick = function () { closeModal(); signIn().then(function (ok) { if (!ok) return res(null); if (pinOf(p)) res('ok'); else { askPin(p).then(res); } }); };
-    m.querySelector('#pc').onclick = function () { closeModal(); res(null); };
+    signIn(p || 'Accesso', p ? 'Accedi: puoi modificare le liste che hai creato o che ti hanno condiviso.' : 'Accedi con l\'account admin.').then(function (ok) {
+      if (!ok) return res(null);
+      if (pinOf(p)) res('ok'); else askPin(p).then(res);
+    });
   });
 }
 var GICON = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
@@ -703,6 +742,7 @@ window.onpopstate = function () { go('home'); };
 
 function render() {
   if (!S.data) return;
+  if (S.shared && FBX.canSee(S.shared)) S.shared = '';
   S.openSec = S.openSec || {};
   var a = document.getElementById('app');
   if (S.view === 'home') a.innerHTML = vHome();
@@ -745,8 +785,12 @@ function vHome() {
   h += '<button class="hero" data-a="mag"><div class="t"><small>MAGAZZINO</small><b>Inventario</b><span class="m">' + nArt + ' articoli · ' + nFuori + ' fuori in questo momento' + (nNotes() ? ' · ✎ ' + nNotes() + (nNotes() > 1 ? ' note' : ' nota') : '') + '</span></div><span class="ar"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16"/><path d="M14 6l6 6-6 6"/></svg></span></button>';
   h += '<div class="search"><span><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><input id="q" placeholder="Cerca un articolo…" value="' + esc(S.q) + '" autocomplete="off"></div>';
   h += '<div id="res">' + results(S.q) + '</div>';
+  var role = S.data.role, vis = S.data.visible || [];
+  if (role === 'guest' || role === 'none') {
+    h += '<div class="gate"><b>' + (role === 'guest' ? 'Liste di produzione' : 'Account non abilitato') + '</b><span>' + (role === 'guest' ? 'Accedi per vedere e creare le liste.' : 'L\'account <b>' + esc(S.data.user.email) + '</b> non è ancora abilitato. Chiedi a un admin di aggiungerti come producer, o al producer di condividerti la sua lista.') + '</span>' + (role === 'guest' ? '<button class="wide gbtn" data-a="login">Accedi</button>' : '') + '</div>';
+  } else {
   h += '<h2>LISTE PRODUZIONE</h2><div class="legend"><span class="tag nt">✎</span> note <span class="tag y"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg></span> da prendere <span class="tag g"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6H3v12h11zM14 9h4l3 4v5h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/></svg></span> fuori</div><div class="plist home">';
-  var prs = S.data.producers.slice().sort(function (a, b) { var x = perOf(a), y = perOf(b); return (x ? hIdx(x.from, x.fromP) : 1e12) - (y ? hIdx(y.from, y.fromP) : 1e12); });
+  var prs = vis.slice().sort(function (a, b) { var x = perOf(a), y = perOf(b); return (x ? hIdx(x.from, x.fromP) : 1e12) - (y ? hIdx(y.from, y.fromP) : 1e12); });
   var chiuse = prs.filter(closedOf); prs = prs.filter(function (p) { return !closedOf(p); });
   if (!prs.length) h += '<p class="hint" style="margin:4px 2px 10px">Nessuna produzione aperta.</p>';
   prs.forEach(function (p) {
@@ -763,7 +807,7 @@ function vHome() {
       '<span class="hc f">' + (fu ? '<span class="tag g" title="fuori"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6H3v12h11zM14 9h4l3 4v5h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/></svg> ' + fu + '</span>' : '') + '</span>' +
       '<span class="ar">' + (canOpen(p) ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' : '<span class="lk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>') + '</span></button>';
   });
-  h += '</div><button class="wide newl" data-a="aadd">+ Crea la tua lista</button>';
+  h += '</div>' + (FBX.isProd() ? '<button class="wide newl" data-a="aadd">+ Crea la tua lista</button>' : '');
   var sto = S.data.storicoList || [];
   if (sto.length) {
     h += '<button class="cl-h' + (S.showClosed ? ' open' : '') + '" data-a="tclosed"><span>Storico produzioni</span><b>' + sto.length + '</b><i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></i></button>';
@@ -788,9 +832,10 @@ function vHome() {
       h += '</div>';
     }
   }
-  h += '<button class="link" data-a="admin"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg> Gestisci liste</button>';
+  }
+  if (isAdmin()) h += '<button class="link" data-a="admin"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg> Gestisci liste</button>';
   var u = FBX.user();
-  h += '<div class="acct">' + (u ? '<span>' + (isAdmin() ? '<b>Admin</b> · ' : '') + esc(u.email) + '</span><button data-a="logout">Esci</button>' : '<button class="gbtn" data-a="login">' + GICON + ' Accedi con Google</button><small>Per creare e modificare le tue liste</small>') + '</div>';
+  h += '<div class="acct">' + (u ? '<span>' + (isAdmin() ? '<b>Admin</b> · ' : FBX.isProd() ? '<b>Producer</b> · ' : '') + esc(u.email) + '</span><button data-a="logout">Esci</button>' : '') + '</div>';
   h += '<p class="hint upd"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> Aggiornato in tempo reale</p></div>';
   return h;
 }
@@ -817,7 +862,7 @@ function rightInfo(it, s) {
 function vList() {
   var p = S.producer;
   if (S.shared) {
-    return '<div class="top"><div class="t">' + LOGO + '<h1>Lista · ' + esc(p) + '</h1></div><button class="ib" data-a="refresh" aria-label="Aggiorna"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button></div><div class="wrap">' + ADDR + (closedOf(p) ? closedBar(p, false) + perBar(p, false) + '<div class="ro">' + listPA(p) + '</div>' : perBar(p, false) + listPA(p)) + '</div>';
+    return '<div class="top"><div class="t">' + LOGO + '<h1>Lista · ' + esc(p) + '</h1></div><button class="ib" data-a="refresh" aria-label="Aggiorna"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button></div><div class="wrap">' + ADDR + (closedOf(p) ? closedBar(p, false) + perBar(p, false) + '<div class="ro">' + listPA(p) + '</div>' : perBar(p, false) + listPA(p)) + (FBX.user() ? '' : '<button class="link" data-a="login">Sei un producer o un collaboratore? Accedi</button>') + '</div>';
   }
   var h = '<div class="top"><button class="ib" data-a="home" aria-label="Indietro"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg></button><div class="t"><small>LISTA</small><h1>' + esc(p) + '</h1></div>' +
     '<button class="ib" data-a="share" aria-label="Condividi"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>' +
@@ -867,6 +912,10 @@ function listPA(p) {
 }
 function listEdit(p) {
   var h = '<div class="search"><span><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><input id="mq" placeholder="Filtra articoli…" value="' + esc(S.mq) + '" autocomplete="off"></div>';
+  if (FBX.canManage(p)) {
+    var cl = ((S.data.owners || {})[p] || {}).collab || [];
+    h += '<button class="collab" data-a="collab"><span><b>Collaboratori</b><small>' + (cl.length ? esc(cl.join(', ')) : 'Nessuno · aggiungi chi lavora con te alla lista') + '</small></span><i>+</i></button>';
+  }
   h += '<button class="add" style="margin:0 0 12px" data-a="newp">+ Prodotto da procurare</button>';
   var ex = (S.data.extras || {})[p] || [];
   if (ex.length) {
@@ -986,7 +1035,13 @@ function vAdmin() {
   h += '<h2>DATI</h2><div class="plist"><div class="arow"><div class="info"><b>Esporta inventario</b><small>File Excel (CSV) con articoli, totali e disponibilità</small></div><button class="mini" data-a="xinv">Scarica</button></div>' +
     '<div class="arow"><div class="info"><b>Esporta liste</b><small>Tutte le liste aperte, riga per riga</small></div><button class="mini" data-a="xlis">Scarica</button></div>' +
     '<div class="arow"><div class="info"><b>Importa dati</b><small>File preparato da Claude (inventario, liste, storico)</small></div><button class="mini" data-a="imp">Carica</button></div></div>';
-  h += '<h2>ADMIN</h2><p class="hint">Account admin: ' + esc(((S.data.adminEmails || []).join(', ')) || '—') + '</p><button class="wide" data-a="aadm">+ Aggiungi un admin</button></div>';
+  var ruolo = function (k, arr, sub) {
+    var x = '<h2>' + (k === 'admin' ? 'ADMIN' : 'PRODUCER') + '</h2><p class="hint">' + sub + '</p><div class="plist">';
+    arr.forEach(function (em) { x += '<div class="arow"><div class="info"><b style="font-size:15px">' + esc(em) + '</b></div>' + (em === 'simonemanfredaa@gmail.com' ? '' : '<button class="mini n" data-a="rdel" data-k="' + k + '" data-n="' + esc(em) + '" aria-label="Togli" style="color:#B3261E">✕</button>') + '</div>'; });
+    return x + '</div><button class="wide" data-a="radd" data-k="' + k + '">+ Aggiungi ' + (k === 'admin' ? 'un admin' : 'un producer') + '</button>';
+  };
+  h += ruolo('producer', S.data.producerEmails || [], 'Vedono tutte le liste, creano e modificano le proprie, le condividono con collaboratori e PA.');
+  h += ruolo('admin', S.data.adminEmails || [], 'Accesso completo: liste di tutti, inventario, utenti.') + '</div>';
   return h;
 }
 function adminCall(fn) {
@@ -1038,16 +1093,24 @@ function act(a, el) {
     });
   }
   else if (a === 'aadd' && !FBX.user()) { signIn().then(function (ok) { if (ok) act(a, el); }); }
+  else if (a === 'aadd' && !FBX.isProd()) { toast('Solo i producer possono creare liste', true); }
   else if (a === 'login') { signIn(); }
   else if (a === 'logout') { FBX.logout().then(function () { S.edit = false; S.inv = null; return call('getData'); }).then(function (d) { S.data = d; go('home'); toast('Disconnesso'); }); }
   else if (a === 'xinv') { exportInv(); }
   else if (a === 'xlis') { exportListe(); }
   else if (a === 'imp') { importDati(); }
   else if (a === 'spdf') { pdfStorico(S.sto); }
-  else if (a === 'aadm') {
-    form('Nuovo admin', 'Email Google della persona: potrà gestire tutte le liste e l\'inventario.', [{ ph: 'nome@gmail.com' }], 'Aggiungi')
-      .then(function (v) { if (v && v[0]) call('addAdmin', v[0]).then(function () { toast('Admin aggiunto'); }).catch(function (e) { toast(msg(e), true); }); });
+  else if (a === 'radd') {
+    var rk = el.getAttribute('data-k');
+    form(rk === 'admin' ? 'Nuovo admin' : 'Nuovo producer', 'Scrivi la sua email (Gmail o qualsiasi altra): entrerà con Google o con il link via email.', [{ ph: 'nome@esempio.com' }], 'Aggiungi')
+      .then(function (v) { if (v && v[0]) save('setRuolo', rk, v[0], true).then(function () { toast('Aggiunto'); }); });
   }
+  else if (a === 'rdel') {
+    var dk = el.getAttribute('data-k'), dn = el.getAttribute('data-n');
+    form('Togliere ' + dn + '?', dk === 'admin' ? 'Non sarà più admin.' : 'Non vedrà più le liste (tranne quelle dove è collaboratore).', [], 'Togli', true)
+      .then(function (v) { if (v) save('setRuolo', dk, dn, false).then(function () { toast('Tolto'); }); });
+  }
+  else if (a === 'collab') { collabModal(p); }
   else if (a === 'aadd') {
     var baseId = el.getAttribute('data-id') || '';
     var ma = modal('<h3>Nuova lista</h3><p>' + (baseId ? 'Parte con gli articoli di <b>' + esc(S.sto.name) + '</b> (quantità da ricontrollare). ' : 'Una lista per ogni produzione. ') + 'Potrai modificarla solo tu (e l\'admin).</p><input id="an" placeholder="Nome (es. Filo - Croquis SS27)" autocomplete="off">' +
@@ -1248,6 +1311,23 @@ function act(a, el) {
   }
 }
 
+function collabModal(p) {
+  var cl = ((S.data.owners || {})[p] || {}).collab || [];
+  var m = modal('<h3>Collaboratori · ' + esc(p) + '</h3><p>Vedono solo questa lista e possono modificarla come te. Entrano con Google o con il link via email.</p>' +
+    (cl.length ? '<div class="plist" style="margin:0 0 12px">' + cl.map(function (em) { return '<div class="arow"><div class="info"><b style="font-size:15px">' + esc(em) + '</b></div><button class="mini n" data-x="' + esc(em) + '" style="color:#B3261E" aria-label="Togli">✕</button></div>'; }).join('') + '</div>' : '') +
+    '<input id="cem" type="email" inputmode="email" autocomplete="off" placeholder="email del collaboratore">' +
+    '<div class="row2"><button class="btn-g" id="cc">Chiudi</button><button class="btn-k" id="ck">Aggiungi</button></div>');
+  m.querySelector('#cc').onclick = closeModal;
+  m.querySelectorAll('[data-x]').forEach(function (b) { b.onclick = function () { closeModal(); save('setCollab', p, b.getAttribute('data-x'), false).then(function () { toast('Tolto'); collabModal(p); }); }; });
+  m.querySelector('#ck').onclick = function () {
+    var em = m.querySelector('#cem').value.trim(); if (!em) return;
+    closeModal(); save('setCollab', p, em, true).then(function () {
+      var url = S.data.appUrl + '?l=' + FBX.listId(p), txt = 'Ti ho aggiunto alla lista magazzino "' + p + '". Entra da qui con la tua email (' + em.toLowerCase() + '): ' + url;
+      var m2 = modal('<h3>Aggiunto</h3><p>Mandagli il link: entra con <b>' + esc(em.toLowerCase()) + '</b> e vede solo questa lista.</p><div class="row2"><button class="btn-g" id="c2">Chiudi</button><a class="btn-k wa" target="_blank" href="https://wa.me/?text=' + encodeURIComponent(txt) + '">WhatsApp</a></div>');
+      m2.querySelector('#c2').onclick = closeModal;
+    });
+  };
+}
 function shareList(p) {
   var url = S.data.appUrl + '?l=' + FBX.listId(p);
   var txt = 'Lista magazzino di ' + p + ': ' + url;

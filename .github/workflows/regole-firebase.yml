@@ -25,4 +25,3 @@ jobs:
         run: |
           npm install --no-save google-auth-library@9 >/dev/null
           node .github/scripts/regole.mjs
-          node .github/scripts/domini.mjs
