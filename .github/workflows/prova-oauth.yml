@@ -1,0 +1,18 @@
+name: Prova accesso Google
+on: workflow_dispatch
+jobs:
+  prova:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - env:
+          SA: ${{ secrets.FIREBASE_SA }}
+        run: printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+      - env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: |
+          npm install --no-save google-auth-library@9 >/dev/null
+          node .github/scripts/prova-oauth.mjs
