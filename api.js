@@ -29,10 +29,10 @@
   function notify() { if (!isReady()) return; clearTimeout(tmr); tmr = setTimeout(function () { if (window.onDataChange) window.onDataChange(); }, 60); }
   function fail(e) { console.error(e); if (window.onDataError) window.onDataError(e); }
 
-  F.onSnapshot(F.collection(db, 'articoli'), function (s) { ART = {}; s.forEach(function (d) { ART[d.id] = d.data(); }); mark('art'); }, fail);
-  F.onSnapshot(F.collection(db, 'liste'), function (s) { LISTE = {}; s.forEach(function (d) { LISTE[d.id] = d.data(); }); mark('liste'); }, fail);
-  F.onSnapshot(F.collection(db, 'note'), function (s) { NOTE = {}; s.forEach(function (d) { NOTE[d.id] = d.data(); }); mark('note'); }, fail);
-  F.onSnapshot(F.collection(db, 'storico'), function (s) { STO = {}; s.forEach(function (d) { STO[d.id] = d.data(); }); mark('sto'); }, fail);
+  F.onSnapshot(F.collection(db, 'articoli'), function (s) { ART = {}; s.forEach(function (d) { ART[d.id] = d.data(); }); mark('art'); }, function (e) { mark('art'); fail(e); });
+  F.onSnapshot(F.collection(db, 'liste'), function (s) { LISTE = {}; s.forEach(function (d) { LISTE[d.id] = d.data(); }); mark('liste'); }, function (e) { mark('liste'); fail(e); });
+  F.onSnapshot(F.collection(db, 'note'), function (s) { NOTE = {}; s.forEach(function (d) { NOTE[d.id] = d.data(); }); mark('note'); }, function (e) { mark('note'); fail(e); });
+  F.onSnapshot(F.collection(db, 'storico'), function (s) { STO = {}; s.forEach(function (d) { STO[d.id] = d.data(); }); mark('sto'); }, function (e) { mark('sto'); fail(e); });
   F.onSnapshot(F.doc(db, 'config', 'ruoli'), function (d) {
     var r = (d.exists() && d.data()) || {};
     ADMINS = (r.admin || []).map(lc); if (ADMINS.indexOf(BOSS) < 0) ADMINS.unshift(BOSS);

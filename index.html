@@ -243,6 +243,7 @@ h2{margin:16px 0 8px;font-size:11.5px}
 .oppure{display:flex;align-items:center;gap:10px;margin:12px 0;color:var(--mut);font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase}.oppure:before,.oppure:after{content:"";flex:1;height:1px;background:var(--line)}
 .gate{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;margin:22px 0 4px;display:flex;flex-direction:column;gap:6px}.gate b{font-size:17px}.gate span{color:var(--mut);font-size:14px;line-height:1.45}.gate span b{font-size:inherit;color:var(--ink)}.gate .gbtn{margin-top:8px}
 .collab{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin:0 0 10px}.collab span{flex:1;min-width:0}.collab b{display:block;font-size:14px}.collab small{display:block;color:var(--mut);font-size:12px;margin-top:2px;overflow-wrap:anywhere}.collab i{font-style:normal;font-weight:800;font-size:20px}
+.warnapp{background:#FFF4E5;border:1px solid #F5C98B;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.45;color:#5A3A00;margin:0 0 12px}
 </style>
 
 <style>
@@ -405,6 +406,7 @@ details.sec-card>summary{gap:10px;padding:8px 0}.sec-card{padding:2px 12px}
 <div id="app"></div>
 <div id="sync" class="sync"></div>
 <div id="loader" class="loader">Carico il magazzino…</div>
+<script>setTimeout(function () { var l = document.getElementById('loader'); if (l && l.style.display !== 'none') l.innerHTML = 'Il caricamento sta durando troppo.<br><small style="display:block;margin:10px auto 14px;max-width:300px;font-weight:500;line-height:1.45">Se l\'hai aperto da WhatsApp o Instagram, aprilo in Safari o Chrome. Altrimenti controlla la connessione.</small><button onclick="location.reload()" style="border:0;border-radius:12px;padding:12px 22px;background:#17181B;color:#fff;font-weight:700">Riprova</button>'; }, 15000);</script>
 
 <script src="fb.js"></script>
 <script src="api.js"></script>
@@ -679,6 +681,7 @@ function ownerOf(p) { var o = (S.data.owners || {})[p]; return o ? (o.name || o.
 function signIn(title, sub) {
   return new Promise(function (res) {
     var m = modal('<h3>' + esc(title || 'Accedi') + '</h3><p>' + esc(sub || 'Entra con Google oppure con la tua email: ti arriva un link, niente password.') + '</p>' +
+      (/WhatsApp|Instagram|FBAN|FBAV|FB_IAB|Line\//i.test(navigator.userAgent) ? '<p class="warnapp"><b>Sei dentro WhatsApp/Instagram:</b> qui Google non fa entrare. Tocca ⋯ o la bussola e scegli <b>Apri in Safari / Chrome</b>, oppure usa il link via email.</p>' : '') +
       '<button class="wide gbtn" id="gk">' + GICON + ' Accedi con Google</button>' +
       '<div class="oppure"><span>oppure</span></div>' +
       '<input id="lem" type="email" inputmode="email" autocomplete="email" placeholder="nome@esempio.com">' +
