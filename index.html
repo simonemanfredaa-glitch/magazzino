@@ -971,7 +971,7 @@ function vMag() {
   var h = '<div class="top">' + (S.sharedInv ? '<div class="t">' + LOGO + '<h1>Inventario</h1></div>' : '<button class="ib" data-a="home" aria-label="Indietro"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg></button><div class="t"><small>MAGAZZINO</small><h1>Inventario</h1></div>') +
     '<button class="pill-btn' + (ed ? ' on' : '') + '" data-a="invedit">' + (ed ? 'Fine' : 'Modifica<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-left:6px;vertical-align:-1px;opacity:.6"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>') + '</button></div><div class="wrap">';
   h += '<div class="search"><span><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><input id="mq" placeholder="Cerca nell\'inventario…" value="' + esc(S.mq) + '" autocomplete="off"></div>';
-  if (ed) h += '<p class="hint">Modifica attiva: usa − / + per il totale.</p>';
+  if (ed) h += '<p class="hint">Modifica attiva: − / + per il totale, ✎ Rinomina per il nome.</p>';
   else h += '<p class="hint">Qualcosa non torna? Premi ✎ accanto all\'articolo e lascia una nota: la leggono i producer.</p>';
   var allN = [];
   S.data.sections.forEach(function (s) { s.items.forEach(function (it) { (it.notes || []).forEach(function (n) { allN.push({ s: s, it: it, n: n }); }); }); });
@@ -1000,6 +1000,7 @@ function vMag() {
       var f = fuori(it);
       var info = it.type === 'cons' ? (it.finendo ? 'Da ricomprare' : 'Se finisce, premi Comprare') : (f.length ? 'Fuori: ' + esc(f.join(', ')) : 'Tutto in magazzino');
       h += '<div class="erow"><div class="info"><b>' + nmTag(it) + '</b><small>' + info + '</small>' +
+        (ed ? '<button class="link" style="margin:4px 0 0;padding:0;font-size:12px;display:block" data-a="ren" data-c="' + s.code + '" data-s="' + it.slot + '">✎ Rinomina</button>' : '') +
         (it.type === 'kit' ? '<div class="kitc">' + (it.kit ? esc(it.kit) : 'Contenuto non ancora scritto') + '</div>' +
           (ed ? '<button class="link" style="margin:4px 0 0;padding:0;font-size:12px" data-a="kit" data-c="' + s.code + '" data-s="' + it.slot + '">✎ Modifica contenuto</button>' : '') : '') +
         (it.notes || []).map(function (n) { return '<div class="inote"><span>✎ ' + esc(n.text) + '</span><em>' + esc(n.date) + '</em>' + (ed ? '<button data-a="inclose" data-r="' + n.row + '">✓</button>' : '') + '</div>'; }).join('') + '</div>';
@@ -1305,6 +1306,11 @@ function act(a, el) {
       var nm = m3.querySelector('#an').value, tt = m3.querySelector('#at').value; closeModal();
       save('addItem', S.inv, pinOf(S.inv), c, nm, tt, kind).then(function () { toast('Aggiunto'); });
     };
+  }
+  else if (a === 'ren') {
+    var itr = item(c, s);
+    form('Rinomina', 'Il nuovo nome vale anche nelle liste aperte.', [{ ph: 'Nome articolo', v: itr.name }], 'Salva')
+      .then(function (v) { if (v && v[0] && v[0].trim() !== itr.name) save('renameItem', c, s, v[0]).then(function (ok) { if (ok !== false) toast('Rinominato'); }); });
   }
   else if (a === 'del') {
     var it3 = item(c, s);

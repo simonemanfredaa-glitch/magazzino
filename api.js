@@ -231,6 +231,11 @@
       var id = nextArtId(), doc = { sez: c, nome: n, ordine: ord + 1, cons: kind === 'cons', tot: kind === 'cons' ? null : Math.max(0, Math.round(Number(t) || 0)), finendo: false, kit: '' };
       ART[id] = doc; W(F.setDoc(F.doc(db, 'articoli', id), doc));
     },
+    renameItem: function (c, i, n) {
+      needAdmin(); var a = artBy(c, i); n = String(n || '').trim(); if (!n) throw new Error('Scrivi il nome');
+      Object.keys(ART).forEach(function (id) { if (id !== String(i) && lc(ART[id].nome) === lc(n)) throw new Error('Esiste già un articolo con questo nome'); });
+      a.nome = n; W(F.updateDoc(F.doc(db, 'articoli', String(i)), { nome: n }));
+    },
     removeItem: function (p, pin, c, i) {
       needAdmin(); var id = String(i);
       Object.keys(LISTE).forEach(function (lid) { var q = ((LISTE[lid].righe || {})[id] || {}).q; if (hasQ(q)) throw new Error('Non posso eliminarlo: è nella lista ' + LISTE[lid].nome); });
